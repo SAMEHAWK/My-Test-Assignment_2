@@ -1,0 +1,27 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5fc175d0fb5d9e34a810e6560bbaae9f, type: 3}
+  m_Name: ResourceDatabase
+  m_EditorClassIdentifier: Assembly-CSharp::Data.ResourceDatabase
+  resources:
+  - type: 0
+    displayName: N1
+    transferPrefab: {fileID: 4488666315420247684, guid: 860e6ed5632492c44b3c5ca1400ad817, type: 3}
+    backpackPrefab: {fileID: 4488666315420247684, guid: 860e6ed5632492c44b3c5ca1400ad817, type: 3}
+  - type: 1
+    displayName: N2
+    transferPrefab: {fileID: 6733126442185620984, guid: b997ef888830af9418f21e66c6811067, type: 3}
+    backpackPrefab: {fileID: 6733126442185620984, guid: b997ef888830af9418f21e66c6811067, type: 3}
+  - type: 2
+    displayName: N3
+    transferPrefab: {fileID: 6733126442185620984, guid: fa9156ac4f0748f47a8016994a92daf2, type: 3}
+    backpackPrefab: {fileID: 6733126442185620984, guid: fa9156ac4f0748f47a8016994a92daf2, type: 3}
