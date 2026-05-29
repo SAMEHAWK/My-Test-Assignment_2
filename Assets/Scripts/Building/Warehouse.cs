@@ -3,8 +3,8 @@ using UnityEngine.Events;
 using System.Collections.Generic;
 using Core;
 
-// 仓库组件 — 管理单一仓库的库存、容量和触发检测
-// Warehouse component — manages inventory, capacity, and trigger detection for a single warehouse
+// 仓库组件 — 管理单一仓库的库存与容量（Trigger 交互在 PlayerWarehouseInteraction）
+// Warehouse component — inventory and capacity (trigger interaction lives on PlayerWarehouseInteraction)
 namespace Building
 {
     public class Warehouse : MonoBehaviour
@@ -29,9 +29,8 @@ namespace Building
         [SerializeField] private List<ResourceType> acceptedTypes = new();
         public IReadOnlyList<ResourceType> AcceptedTypes => acceptedTypes;
 
-        // 当前库存 / Current inventory
-        private Dictionary<ResourceType, int> storedResources = new();
-        public IReadOnlyDictionary<ResourceType, int> StoredResources => storedResources;
+        private ResourceInventory _inventory;
+        public IReadOnlyDictionary<ResourceType, int> StoredResources => _inventory.StoredResources;
 
         [Tooltip("运行时库存快照（仅调试查看） / Runtime inventory snapshot (debug read-only)")]
         [SerializeField] private string inventoryDebug = "空 / Empty";
@@ -42,82 +41,52 @@ namespace Building
         [Tooltip("资源移除时触发 / Fired when a resource is removed")]
         public UnityEvent<ResourceType, int> OnResourceRemoved;
 
-        // 检查是否接受该资源类型 / Check if this resource type is accepted
+        private void Awake()
+        {
+            _inventory = new ResourceInventory(capacity);
+        }
+
         public bool AcceptsType(ResourceType type)
         {
             return acceptedTypes.Count == 0 || acceptedTypes.Contains(type);
         }
 
-        // 检查能否添加指定数量的资源 / Check if there is enough space to add the resource
         public bool CanAddResource(ResourceType type, int amount)
         {
-            if (!AcceptsType(type))
-                return false;
-            return GetTotalStored() + amount <= capacity;
+            return _inventory.CanAdd(type, amount, AcceptsType);
         }
 
-        // 检查能否移除指定数量的资源 / Check if there is enough stock to remove the resource
         public bool CanRemoveResource(ResourceType type, int amount)
         {
-            return HasResources(type, amount);
+            return _inventory.CanRemove(type, amount);
         }
 
-        // 添加资源到仓库 / Add resources to warehouse
         public void AddResource(ResourceType type, int amount)
         {
-            if (!CanAddResource(type, amount))
+            if (!_inventory.TryAdd(type, amount, AcceptsType))
                 return;
 
-            if (!storedResources.ContainsKey(type))
-                storedResources[type] = 0;
-
-            storedResources[type] += amount;
             RefreshDebugDisplay();
             OnResourceAdded?.Invoke(type, amount);
         }
 
-        // 从仓库移除资源 / Remove resources from warehouse
         public void RemoveResource(ResourceType type, int amount)
         {
-            if (!CanRemoveResource(type, amount))
+            if (!_inventory.TryRemove(type, amount))
                 return;
-
-            storedResources[type] -= amount;
-            if (storedResources[type] <= 0)
-                storedResources.Remove(type);
 
             RefreshDebugDisplay();
             OnResourceRemoved?.Invoke(type, amount);
         }
 
-        // 获取仓库中所有资源的总数量 / Get total count of all stored resources
-        public int GetTotalStored()
-        {
-            int total = 0;
-            foreach (var kvp in storedResources)
-                total += kvp.Value;
-            return total;
-        }
+        public int GetTotalStored() => _inventory.GetTotalStored();
 
-        // 仓库是否已满 / Whether the warehouse is full
-        public bool IsFull()
-        {
-            return GetTotalStored() >= capacity;
-        }
+        public bool IsFull() => _inventory.IsFull();
 
-        // 是否拥有足够数量的指定资源 / Whether the warehouse has enough of the specified resource
-        public bool HasResources(ResourceType type, int amount)
-        {
-            return storedResources.TryGetValue(type, out int current) && current >= amount;
-        }
+        public bool HasResources(ResourceType type, int amount) => _inventory.HasResources(type, amount);
 
-        // 获取指定资源的库存数量 / Get stored amount of a specific resource type
-        public int GetResourceCount(ResourceType type)
-        {
-            return storedResources.TryGetValue(type, out int count) ? count : 0;
-        }
+        public int GetResourceCount(ResourceType type) => _inventory.GetResourceCount(type);
 
-        // 更新 Inspector 调试显示 / Update inspector debug display
         private void RefreshDebugDisplay()
         {
             int total = GetTotalStored();
@@ -129,10 +98,8 @@ namespace Building
 
             var parts = new System.Text.StringBuilder();
             parts.Append($"{total}/{capacity}  ");
-            foreach (var kvp in storedResources)
-            {
+            foreach (var kvp in StoredResources)
                 parts.Append($"[{kvp.Key}:{kvp.Value}] ");
-            }
             inventoryDebug = parts.ToString().TrimEnd();
         }
     }

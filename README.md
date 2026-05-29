@@ -17,6 +17,7 @@ A Unity 6 (6000.3.13f1) resource production chain game for a technical assessmen
 - [Configuration & Parameters](#configuration--parameters)
 - [Related Documents](#related-documents)
 - [Requirements](#requirements)
+- [Verification](#verification)
 - [FAQ](#faq)
 - [Notes](#notes)
 
@@ -117,7 +118,7 @@ Production state is broadcast via `BuildingProduction.OnStateChanged`. The built
 ### Editor steps (BuildingStatusText)
 
 1. Under building root (`BuildingProduction`): `GameObject > UI > Canvas`, set **Render Mode = World Space**, scale ~`0.01`, position above building, assign **Event Camera = Main Camera**.
-2. Child: `UI > Text - TextMeshPro`, set **Text** to building name (e.g. `N2 Producter`).
+2. Child: `UI > Text - TextMeshPro`, set **Text** to building name (e.g. `N2 Producer`).
 3. Add **Building Status Text** component; drag `BuildingProduction` into **Building** (or leave empty if under building hierarchy).
 4. Apply Prefab; Play to verify stop/resume text.
 
@@ -231,23 +232,22 @@ My-Test-Assignment_2/
 │   │   ├── N1.prefab / N2.prefab / N3.prefab       # Resource cubes
 │   │   └── Building/
 │   │       ├── Warehouse.prefab                      # Warehouse template
-│   │       ├── N1 Producter.prefab                   # Building 1
-│   │       ├── N2 Producter Variant.prefab           # Building 2
-│   │       └── N3 Producter Variant Variant.prefab   # Building 3
+│   │       ├── N1 Producer.prefab                    # Building 1
+│   │       ├── N2 Producer.prefab                    # Building 2 (Variant)
+│   │       └── N3 Producer.prefab                    # Building 3 (Variant)
 │   ├── Scenes/
 │   │   └── SampleScene.unity         # ★ Main scene (Play entry)
 │   ├── Scripts/                      # See script directory above
 │   ├── InputSystem_Actions.inputactions  # Input System action definitions
-│   ├── InputSystem_Actions.cs        # Auto-generated input C# class
+│   └── InputSystem_Actions.cs        # Auto-generated (under Scripts/Input/)
 │   ├── Materials/                    # Resource materials
 │   └── Settings/                     # URP render pipeline settings
 ├── docs/
 │   ├── 架构设计.md                   # Authoritative architecture document
-│   └── 多会话并行执行计划.md          # Parallel development file allocation
+│   └── 项目改进计划.md               # Code improvement roadmap
 ├── ProjectSettings/
 ├── Packages/
-├── AGENTS.md                         # AI collaboration conventions
-└── README.zh-CN.md                   # This file (Chinese)
+└── README.zh-CN.md                   # Chinese version
 ```
 
 | Path | Description |
@@ -255,7 +255,7 @@ My-Test-Assignment_2/
 | `Assets/Configs/` | All adjustable game parameter SOs — **tune here first** |
 | `Assets/Prefabs/` | Building, warehouse, resource cube, player Prefabs |
 | `Assets/Scenes/SampleScene.unity` | Runtime entry scene |
-| `docs/` | Architecture design and parallel development docs |
+| `docs/` | Architecture design and improvement plan |
 
 ---
 
@@ -318,8 +318,7 @@ Controls transfer animation and queue behavior.
 | Document | Path | Description |
 |------|------|------|
 | Architecture Design | [docs/架构设计.md](docs/架构设计.md) | Core design doc, component relationships, data flow |
-| Parallel Execution Plan | [docs/多会话并行执行计划.md](docs/多会话并行执行计划.md) | Multi-AI session file allocation & interface contracts |
-| AI Conventions | [AGENTS.md](AGENTS.md) | AI assistant behavior rules for this project |
+| Improvement Plan | [docs/项目改进计划.md](docs/项目改进计划.md) | Code improvement items, phases, acceptance criteria |
 
 ---
 
@@ -328,6 +327,17 @@ Controls transfer animation and queue behavior.
 - Unity 6000.3.13f1 (LTS)
 - Universal Render Pipeline (URP)
 - Input System package
+
+---
+
+## Verification
+
+Manually verified in Unity Play Mode on **2026-05-29** (see `docs/架构设计.md` §7):
+
+- Three buildings auto-produce N1 → N2 → N3 at configured intervals
+- All transfers use Lerp flight animations; stop states show on world-space TMP **and building mesh color** (green/red/yellow)
+- Auto pickup/deposit near warehouses; production resumes via `TryResumeProduction`
+- EditMode tests: `Window > General > Test Runner` → EditMode → Run All (`ResourceInventoryTests` + thin adapter tests)
 
 ---
 
@@ -352,9 +362,3 @@ A: Fully automatic. Step within a warehouse Trigger zone → `PlayerWarehouseInt
 **Q: The backpack / warehouse shows too many stacked blocks — can I adjust layout?**
 
 A: Yes. On `BackpackView` / `WarehouseView` components, adjust `Columns`, `Rows Per Layer`, `Horizontal Spacing`, `Depth Spacing`, and `Layer Height` — the grid layout recalculates automatically.
-
----
-
-## Notes
-
-This project was completed with AI assistance (Cursor + Deepseek V4 Pro / Claude Code). Code follows bilingual comment conventions (Chinese + English) as specified in AGENTS.md. Architecture decisions and design rationale are recorded in docs/.

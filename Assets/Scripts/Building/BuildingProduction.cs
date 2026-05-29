@@ -41,11 +41,16 @@ namespace Building
         // 生产计时器 / Production timer
         private float productionTimer;
 
-        // 解析传输管理器引用 / Resolve transfer manager reference
-        private TransferManager Transfer => transferManager != null ? transferManager : TransferManager.Instance;
+        // 尚未落地到 Output 仓库的产出数量（计入容量预占）/ In-flight output units reserved against capacity
+        private int _inFlightOutputCount;
 
-        private void Awake()
-        {
+        private TransferManager _transfer;
+
+        private void Awake() {
+            _transfer = transferManager != null ? transferManager : TransferManager.Instance;
+            if (_transfer == null)
+                Debug.LogError("[BuildingProduction] TransferManager not found.", this);
+
             FindWarehouses();
         }
 
@@ -142,97 +147,137 @@ namespace Building
         // 尝试执行一轮生产 / Attempt one production cycle
         private void TryProduce()
         {
-            // 1. 检查输入资源是否充足 / Check if input resources are sufficient
             if (!HasRequiredInputs())
             {
                 ChangeState(BuildingState.InputMissing);
                 return;
             }
 
-            // 2. 检查输出仓库是否能容纳本轮全部产出 / Check if output warehouse can fit this cycle's output
             if (!CanFitOutputRecipe())
             {
                 ChangeState(BuildingState.OutputFull);
                 return;
             }
 
-            // 收集待播放的动画（含回调）/ Collect animation requests (with callbacks)
+            var rollbackInputs = DeductInputs();
             var animations = new List<(ResourceType type, Transform start, Transform end, System.Action onComplete)>();
 
-            // 3. 同步扣除输入资源，消耗动画纯视觉 / Deduct inputs sync, animation visual-only
-            foreach (var recipe in config.inputRecipe)
-            {
-                for (int i = 0; i < recipe.amount; i++)
-                {
-                    inputWarehouse?.RemoveResource(recipe.type, 1);
-
-                    if (consumeAnchor != null && inputWarehouse?.ContentPoint != null)
-                        animations.Add((recipe.type, inputWarehouse.ContentPoint, consumeAnchor, null));
-                }
-            }
-
-            // 4. 产出资源在动画到达后才加入仓库 / Add output on animation arrival
             foreach (var recipe in config.outputRecipe)
             {
                 for (int i = 0; i < recipe.amount; i++)
                 {
                     var capturedType = recipe.type;
                     var capturedOutput = outputWarehouse;
+                    var capturedRollback = rollbackInputs;
+
+                    _inFlightOutputCount++;
+
+                    System.Action onComplete = () => OnOutputTransferComplete(
+                        capturedType, capturedOutput, capturedRollback);
 
                     if (capturedOutput?.SpawnPoint != null && capturedOutput?.ContentPoint != null)
                     {
-                        animations.Add((capturedType, capturedOutput.SpawnPoint, capturedOutput.ContentPoint, () =>
-                        {
-                            if (capturedOutput != null && capturedOutput.CanAddResource(capturedType, 1))
-                            {
-                                capturedOutput.AddResource(capturedType, 1);
-                                OnProductionCompleted?.Invoke(capturedType);
-                            }
-                        }));
+                        animations.Add((capturedType, capturedOutput.SpawnPoint, capturedOutput.ContentPoint, onComplete));
                     }
                     else
                     {
-                        if (capturedOutput != null && capturedOutput.CanAddResource(capturedType, 1))
-                        {
-                            capturedOutput.AddResource(capturedType, 1);
-                            OnProductionCompleted?.Invoke(capturedType);
-                        }
+                        onComplete.Invoke();
                     }
                 }
             }
 
-            // 5. 错开播放动画 / Play animations staggered
+            foreach (var recipe in config.inputRecipe)
+            {
+                for (int i = 0; i < recipe.amount; i++)
+                {
+                    if (consumeAnchor != null && inputWarehouse?.ContentPoint != null)
+                    {
+                        animations.Add((recipe.type, inputWarehouse.ContentPoint, consumeAnchor, null));
+                    }
+                }
+            }
+
             if (animations.Count > 0)
                 StartCoroutine(PlayAnimationsStaggered(animations));
 
-            // 6. 恢复生产状态 / Resume producing state
             ChangeState(BuildingState.Producing);
+        }
+
+        // 同步扣除输入并返回回滚列表 / Deduct inputs synchronously and return rollback list
+        private List<(ResourceType type, int amount)> DeductInputs()
+        {
+            var rollback = new List<(ResourceType type, int amount)>();
+            if (config.inputRecipe == null || inputWarehouse == null)
+                return rollback;
+
+            foreach (var recipe in config.inputRecipe)
+            {
+                inputWarehouse.RemoveResource(recipe.type, recipe.amount);
+                rollback.Add((recipe.type, recipe.amount));
+            }
+
+            return rollback;
+        }
+
+        // 产出动画落地回调：入库或回滚原料 / Output transfer callback: deposit or rollback inputs
+        private void OnOutputTransferComplete(
+            ResourceType type,
+            Warehouse output,
+            List<(ResourceType type, int amount)> rollbackInputs)
+        {
+            _inFlightOutputCount = Mathf.Max(0, _inFlightOutputCount - 1);
+
+            if (output != null && output.CanAddResource(type, 1))
+            {
+                output.AddResource(type, 1);
+                OnProductionCompleted?.Invoke(type);
+                return;
+            }
+
+            RollbackInputs(rollbackInputs);
+            ChangeState(BuildingState.OutputFull);
+            Debug.LogError(
+                $"[BuildingProduction] 产出 {type} 无法入库，已回滚本轮原料 / Output {type} rejected, inputs rolled back",
+                this);
+        }
+
+        // 将本轮已扣原料退回 Input 仓库 / Return deducted inputs to input warehouse
+        private void RollbackInputs(List<(ResourceType type, int amount)> rollbackInputs)
+        {
+            if (inputWarehouse == null || rollbackInputs == null) return;
+
+            foreach (var (type, amount) in rollbackInputs)
+            {
+                if (amount > 0)
+                    inputWarehouse.AddResource(type, amount);
+            }
         }
 
         // 逐帧错开播放传输动画 / Play transfer animations staggered
         private IEnumerator PlayAnimationsStaggered(
             List<(ResourceType type, Transform start, Transform end, System.Action onComplete)> animations)
         {
+            float stagger = _transfer != null ? _transfer.ProductionStaggerInterval : 0.15f;
+
             foreach (var (type, start, end, onComplete) in animations)
             {
-                Transfer.PlayTransfer(type, start, end, onComplete);
-                yield return new WaitForSeconds(0.15f);
+                _transfer?.PlayTransfer(type, start, end, onComplete);
+                yield return new WaitForSeconds(stagger);
             }
         }
 
-        // 检查输出仓库是否能容纳本轮配方产出 / Check if output warehouse can fit all recipe outputs
+        // 检查输出仓库是否能容纳本轮配方产出（含在途预占）/ Check output capacity including in-flight reservation
         private bool CanFitOutputRecipe()
         {
             if (outputWarehouse == null || config.outputRecipe == null || config.outputRecipe.Length == 0)
                 return true;
 
+            int outputUnits = 0;
             foreach (var recipe in config.outputRecipe)
-            {
-                if (!outputWarehouse.CanAddResource(recipe.type, recipe.amount))
-                    return false;
-            }
+                outputUnits += recipe.amount;
 
-            return true;
+            return outputWarehouse.GetTotalStored() + _inFlightOutputCount + outputUnits
+                   <= outputWarehouse.Capacity;
         }
 
         // 检查所有输入资源是否充足 / Check if all required input resources are available

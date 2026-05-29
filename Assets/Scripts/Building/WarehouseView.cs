@@ -35,8 +35,19 @@ namespace Building
         [Tooltip("显示锚点（留空则使用仓库的 ContentPoint）/ Display anchor (uses warehouse ContentPoint if empty)")]
         [SerializeField] private Transform displayAnchor;
 
+        [Tooltip("对象池（留空则使用单例）/ Object pool (uses singleton if empty)")]
+        [SerializeField] private ResourceObjectPool objectPool;
+
         // 已生成的方块列表 / List of spawned blocks
         private readonly List<GameObject> spawnedBlocks = new();
+
+        private ResourceObjectPool _pool;
+
+        private void Awake() {
+            _pool = objectPool != null ? objectPool : ResourceObjectPool.Instance;
+            if (_pool == null)
+                Debug.LogError("[WarehouseView] ResourceObjectPool not found.", this);
+        }
 
         private void Start()
         {
@@ -92,7 +103,7 @@ namespace Building
                     Vector3 worldPos = displayAnchor.TransformPoint(localPos);
                     Quaternion rot = displayAnchor.rotation;
 
-                    GameObject block = ResourceObjectPool.Instance?.Get(entry.backpackPrefab, worldPos, rot, displayAnchor);
+                    GameObject block = _pool?.Get(entry.backpackPrefab, worldPos, rot, displayAnchor);
                     if (block != null)
                         spawnedBlocks.Add(block);
                     index++;
@@ -106,7 +117,7 @@ namespace Building
             foreach (var block in spawnedBlocks)
             {
                 if (block != null)
-                    ResourceObjectPool.Instance?.Return(block);
+                    _pool?.Return(block);
             }
             spawnedBlocks.Clear();
         }

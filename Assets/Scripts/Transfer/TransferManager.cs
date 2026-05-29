@@ -19,6 +19,12 @@ namespace Transfer
         [Tooltip("传输配置 / Transfer config")]
         [SerializeField] private ResourceTransferConfig config;
 
+        [Tooltip("对象池（留空则使用单例）/ Object pool (uses singleton if empty)")]
+        [SerializeField] private ResourceObjectPool objectPool;
+
+        public float ProductionStaggerInterval =>
+            config != null ? config.productionStaggerInterval : 0.15f;
+
         // 传输请求内部结构 / Internal transfer request struct
         private struct TransferRequest
         {
@@ -31,14 +37,20 @@ namespace Transfer
         private readonly Queue<TransferRequest> pendingTransfers = new();
         private float queueTimer;
 
-        private void Awake()
-        {
+        private ResourceObjectPool _pool;
+
+        private void Awake() {
+            _pool = objectPool != null ? objectPool : ResourceObjectPool.Instance;
+
             if (Instance != null && Instance != this)
             {
                 Destroy(gameObject);
                 return;
             }
             Instance = this;
+
+            if (_pool == null)
+                Debug.LogError("[TransferManager] ResourceObjectPool not found.", this);
         }
 
         private void Start()
@@ -50,7 +62,7 @@ namespace Transfer
                 {
                     ResourceEntry entry = resourceDatabase.GetResourceData(type);
                     if (entry?.transferPrefab != null)
-                        ResourceObjectPool.Instance?.Prewarm(entry.transferPrefab, perType);
+                        _pool?.Prewarm(entry.transferPrefab, perType);
                 }
             }
         }
@@ -60,7 +72,7 @@ namespace Transfer
         public void PlayTransfer(ResourceType type, Transform startPoint, Transform endPoint, Action onComplete)
         {
             ResourceEntry entry = resourceDatabase?.GetResourceData(type);
-            if (entry?.transferPrefab == null || ResourceObjectPool.Instance == null)
+            if (entry?.transferPrefab == null || _pool == null)
             {
                 onComplete?.Invoke();
                 return;
@@ -69,7 +81,7 @@ namespace Transfer
             Vector3 start = startPoint != null ? startPoint.position : Vector3.zero;
             Vector3 end = endPoint != null ? endPoint.position : Vector3.zero;
 
-            GameObject obj = ResourceObjectPool.Instance.Get(entry.transferPrefab, start, Quaternion.identity);
+            GameObject obj = _pool.Get(entry.transferPrefab, start, Quaternion.identity);
             if (obj == null)
             {
                 onComplete?.Invoke();
@@ -138,7 +150,7 @@ namespace Transfer
             if (obj != null)
             {
                 obj.transform.position = endPos;
-                ResourceObjectPool.Instance?.Return(obj);
+                _pool?.Return(obj);
             }
 
             onComplete?.Invoke();

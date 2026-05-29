@@ -9,9 +9,6 @@ namespace Transfer
     {
         public static ResourceObjectPool Instance { get; private set; }
 
-        [Tooltip("每种 Prefab 默认预热数量 / Default prewarm count per prefab type")]
-        [SerializeField] private int defaultPoolSize = 10;
-
         // 对象池：prefab → 闲置实例队列 / Pool: prefab → idle instance queue
         private Dictionary<GameObject, Queue<GameObject>> pool = new();
 

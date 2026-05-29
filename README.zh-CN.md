@@ -15,6 +15,7 @@
 - [配置与参数说明](#配置与参数说明)
 - [相关文档](#相关文档)
 - [环境要求](#环境要求)
+- [自测验证（Verification）](#自测验证verification)
 - [常见问题](#常见问题)
 - [备注](#备注)
 
@@ -108,7 +109,7 @@
 
 | 状态 | 显示 |
 |------|------|
-| `Producing` | 仅建筑名（TMP 初始文本），如 `N2 Producter` |
+| `Producing` | 仅建筑名（TMP 初始文本），如 `N2 Producer` |
 | `InputMissing` | 建筑名 + `Need N1x2(has 1)` |
 | `InputMissing`（库存已够、等待恢复） | 建筑名 + `Ready`（极短过渡，通常随即切回生产） |
 | `OutputFull` | 建筑名 + `Output full (8/8)` |
@@ -129,7 +130,7 @@
 2. **创建 TMP 文字**
    - 右键 `StatusCanvas` → `UI > Text - TextMeshPro`（若首次使用按提示 Import TMP Essentials）
    - 命名为 `StatusText`
-   - **Text** 字段填入建筑名（与 `BuildingProductionConfig.buildingName` 一致，如 `N2 Producter`）——此文本即正常生产时的显示内容
+   - **Text** 字段填入建筑名（与 `BuildingProductionConfig.buildingName` 一致，如 `N2 Producer`）——此文本即正常生产时的显示内容
    - `Font Size` 约 `0.8`（World Space 下按 Scale 调整）
    - `Alignment` 水平/垂直均居中
    - **预期**：文字居中显示于 Canvas 内
@@ -266,22 +267,21 @@ My-Test-Assignment_2/
 │   │   ├── N1.prefab / N2.prefab / N3.prefab   # 资源方块
 │   │   └── Building/
 │   │       ├── Warehouse.prefab                 # 仓库模板
-│   │       ├── N1 Producter.prefab              # 建筑 1
-│   │       ├── N2 Producter Variant.prefab      # 建筑 2
-│   │       └── N3 Producter Variant Variant.prefab  # 建筑 3
+│   │       ├── N1 Producer.prefab                 # 建筑 1
+│   │       ├── N2 Producer.prefab                 # 建筑 2（Variant）
+│   │       └── N3 Producer.prefab                 # 建筑 3（Variant）
 │   ├── Scenes/
 │   │   └── SampleScene.unity       # ★ 主场景（Play 入口）
 │   ├── Scripts/                    # 见上文脚本目录
 │   ├── InputSystem_Actions.inputactions  # Input System 输入定义
-│   ├── InputSystem_Actions.cs      # 自动生成的输入 C# 类
+│   └── InputSystem_Actions.cs      # 自动生成（位于 Scripts/Input/）
 │   ├── Materials/                  # 资源材质
 │   └── Settings/                   # URP 渲染管线设置
 ├── docs/
 │   ├── 架构设计.md                 # 权威架构文档
-│   └── 多会话并行执行计划.md       # 并行开发文件分配
+│   └── 项目改进计划.md             # 代码改进路线
 ├── ProjectSettings/
 ├── Packages/
-├── AGENTS.md                       # AI 协作规范
 └── README.zh-CN.md                 # 本文件
 ```
 
@@ -290,7 +290,7 @@ My-Test-Assignment_2/
 | `Assets/Configs/` | 所有可调游戏参数 SO，**优先在此调参** |
 | `Assets/Prefabs/` | 建筑、仓库、资源方块、玩家 Prefab |
 | `Assets/Scenes/SampleScene.unity` | 运行入口场景 |
-| `docs/` | 架构设计与并行开发文档 |
+| `docs/` | 架构设计与改进计划 |
 
 ---
 
@@ -470,8 +470,7 @@ My-Test-Assignment_2/
 | 文档 | 路径 | 用途 |
 |------|------|------|
 | 架构设计 | [docs/架构设计.md](docs/架构设计.md) | 模块关系、数据流、设计决策（**技术权威**） |
-| 并行执行计划 | [docs/多会话并行执行计划.md](docs/多会话并行执行计划.md) | 多 AI 会话文件分配与接口约定 |
-| AI 协作规范 | [AGENTS.md](AGENTS.md) | 代码注释、工作流程规范 |
+| 项目改进计划 | [docs/项目改进计划.md](docs/项目改进计划.md) | 代码改进项、评审反馈、实施阶段 |
 
 ---
 
@@ -483,6 +482,19 @@ My-Test-Assignment_2/
 | 渲染管线 | Universal Render Pipeline (URP) |
 | 输入 | Input System（`com.unity.inputsystem`） |
 | 平台 | 编辑器 Play 模式即可体验；虚拟摇杆面向触控/移动端 |
+
+---
+
+## 自测验证（Verification）
+
+以下项已于 **2026-05-29** 在 Unity Play 模式下手动验证（详见 `docs/架构设计.md` 第七章）：
+
+- 三座建筑按配置间隔自动生产 N1 → N2 → N3
+- 建筑产出 / 拾取 / 存放均带 Lerp 飞行动画
+- 缺料显示 `InputMissing` 状态文字；满库显示 `OutputFull`；**建筑 Visual 网格颜色**随状态切换（绿/红/黄，`BuildingProductionView`）
+- 玩家靠近 Output 自动拾取、靠近 Input 自动存放
+- 入库或取货后 `TryResumeProduction` 立即恢复生产
+- EditMode 单元测试：`Window > General > Test Runner` → EditMode → Run All（`ResourceInventoryTests` + 适配器薄测）
 
 ---
 
@@ -512,7 +524,7 @@ My-Test-Assignment_2/
 
 **Q：修改 Input Actions 后编译报错？**
 
-- 在 `Assets/InputSystem_Actions.inputactions` 上勾选 **Generate C# Class** 并 Apply，等待重新生成 `InputSystem_Actions.cs`
+- 在 `Assets/Scripts/Input/InputSystem_Actions.inputactions` 上勾选 **Generate C# Class** 并 Apply，等待重新生成 `InputSystem_Actions.cs`
 
 **Q：如何新增第四座建筑？**
 
@@ -526,5 +538,4 @@ My-Test-Assignment_2/
 
 ## 备注
 
-- 本项目由 AI 辅助完成（Cursor + Claude Code 等），代码注释遵循 [AGENTS.md](AGENTS.md) 中英双语规范。
 - 英文说明见 [README.md](README.md)（内容与中文版应对齐，若发现不一致以本文件及 `docs/` 为准）。

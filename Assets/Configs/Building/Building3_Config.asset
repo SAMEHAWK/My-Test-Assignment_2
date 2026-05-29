@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 7f4d0e2577f726748bc7b11f0001aeff, type: 3}
   m_Name: Building3_Config
   m_EditorClassIdentifier: Assembly-CSharp::Data.BuildingProductionConfig
-  buildingName: N3 Producter
+  buildingName: N3 Producer
   productionInterval: 3
   inputRecipe:
   - type: 0

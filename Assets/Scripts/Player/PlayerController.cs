@@ -33,6 +33,11 @@ namespace Player
             _input.Player.Disable();
         }
 
+        private void OnDestroy()
+        {
+            _input?.Dispose();
+        }
+
         private void Update()
         {
             Vector2 input = _input.Player.Move.ReadValue<Vector2>();

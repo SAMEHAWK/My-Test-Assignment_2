@@ -1,7 +1,9 @@
+using System.Collections.Generic;
 using UnityEngine;
 using Core;
 using Building;
 using Transfer;
+using Data;
 
 // 玩家仓库交互 — Trigger 检测附近仓库，按间隔自动拾取/存放资源
 // Player warehouse interaction — detects nearby warehouse via trigger, auto pickup/deposit on interval
@@ -21,12 +23,13 @@ namespace Player
         private Warehouse _currentWarehouse;
         private float _transferTimer;
 
-        // 解析传输管理器引用 / Resolve transfer manager reference
-        private TransferManager Transfer => transferManager != null ? transferManager : TransferManager.Instance;
+        private TransferManager _transfer;
 
-        private void Awake()
-        {
+        private void Awake() {
             _backpack = GetComponent<PlayerBackpack>();
+            _transfer = transferManager != null ? transferManager : TransferManager.Instance;
+            if (_transfer == null)
+                Debug.LogError("[PlayerWarehouseInteraction] TransferManager not found.", this);
         }
 
         private void Update()
@@ -54,7 +57,6 @@ namespace Player
         {
             if (_backpack.IsFull()) return;
 
-            // 捕获当前引用，防止回调时玩家已离开 / Capture current references to avoid stale refs in callback
             Warehouse warehouse = _currentWarehouse;
             if (warehouse == null) return;
 
@@ -65,16 +67,14 @@ namespace Player
                 if (kvp.Value <= 0) continue;
                 if (!_backpack.CanAddResource(type)) continue;
 
-                // 立即从仓库扣除 / Deduct from warehouse immediately
                 warehouse.RemoveResource(type, 1);
 
                 Transform startPoint = warehouse.ContentPoint;
                 Transform endPoint = _backpack.backpackAnchor;
                 PlayerBackpack backpack = _backpack;
 
-                Transfer.EnqueueTransfer(type, startPoint, endPoint, () =>
+                _transfer.EnqueueTransfer(type, startPoint, endPoint, () =>
                 {
-                    // 动画完成后加入背包；失败则退回仓库 / Add to backpack on arrival; return to warehouse on failure
                     if (backpack.CanAddResource(type, 1))
                     {
                         backpack.AddResource(type, 1);
@@ -94,42 +94,77 @@ namespace Player
         // 从背包取出资源放入 Input 仓库 / Deposit resource from backpack to input warehouse
         private void TryDepositToWarehouse()
         {
-            // 捕获当前引用 / Capture current references
             Warehouse warehouse = _currentWarehouse;
             if (warehouse == null) return;
             if (warehouse.IsFull()) return;
 
+            if (!TrySelectDepositType(warehouse, out ResourceType type))
+                return;
+
             PlayerBackpack backpack = _backpack;
-            var stored = backpack.StoredResources;
-            foreach (var kvp in stored)
+            backpack.RemoveResource(type, 1);
+
+            Transform startPoint = backpack.backpackAnchor;
+            Transform endPoint = warehouse.ContentPoint;
+
+            _transfer.EnqueueTransfer(type, startPoint, endPoint, () =>
             {
-                ResourceType type = kvp.Key;
-                if (kvp.Value <= 0) continue;
-                if (!warehouse.CanAddResource(type, 1)) continue;
-
-                // 立即从背包扣除 / Deduct from backpack immediately
-                backpack.RemoveResource(type, 1);
-
-                Transform startPoint = backpack.backpackAnchor;
-                Transform endPoint = warehouse.ContentPoint;
-
-                Transfer.EnqueueTransfer(type, startPoint, endPoint, () =>
+                if (warehouse.CanAddResource(type, 1))
                 {
-                    // 动画完成后加入仓库；失败则退回背包 / Add to warehouse on arrival; return to backpack on failure
-                    if (warehouse.CanAddResource(type, 1))
-                    {
-                        warehouse.AddResource(type, 1);
-                    }
-                    else if (backpack.CanAddResource(type, 1))
-                    {
-                        backpack.AddResource(type, 1);
-                        Debug.LogWarning(
-                            $"[PlayerWarehouseInteraction] 仓库已满或不可接受，资源 {type} 已退回背包 / Warehouse unavailable, {type} returned to backpack");
-                    }
-                });
+                    warehouse.AddResource(type, 1);
+                }
+                else if (backpack.CanAddResource(type, 1))
+                {
+                    backpack.AddResource(type, 1);
+                    Debug.LogWarning(
+                        $"[PlayerWarehouseInteraction] 仓库已满或不可接受，资源 {type} 已退回背包 / Warehouse unavailable, {type} returned to backpack");
+                }
+            });
+        }
 
-                break;
+        // 按建筑 inputRecipe 优先选择仍缺料的资源类型 / Prefer recipe types still missing in input warehouse
+        private bool TrySelectDepositType(Warehouse warehouse, out ResourceType selectedType)
+        {
+            selectedType = default;
+
+            var building = warehouse.GetComponentInParent<BuildingProduction>();
+            RecipeEntry[] recipe = building?.Config?.inputRecipe;
+
+            if (recipe != null && recipe.Length > 0)
+            {
+                foreach (var entry in recipe)
+                {
+                    if (!_backpack.CanRemoveResource(entry.type)) continue;
+                    if (!warehouse.CanAddResource(entry.type, 1)) continue;
+
+                    int current = warehouse.GetResourceCount(entry.type);
+                    if (current < entry.amount)
+                    {
+                        selectedType = entry.type;
+                        return true;
+                    }
+                }
+
+                foreach (var entry in recipe)
+                {
+                    if (!_backpack.CanRemoveResource(entry.type)) continue;
+                    if (!warehouse.CanAddResource(entry.type, 1)) continue;
+
+                    selectedType = entry.type;
+                    return true;
+                }
             }
+
+            foreach (var kvp in _backpack.StoredResources)
+            {
+                if (kvp.Value <= 0) continue;
+                if (!warehouse.CanAddResource(kvp.Key, 1)) continue;
+
+                selectedType = kvp.Key;
+                return true;
+            }
+
+            return false;
         }
 
         private void OnTriggerEnter(Collider other)

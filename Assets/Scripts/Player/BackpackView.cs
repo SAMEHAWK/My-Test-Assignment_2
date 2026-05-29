@@ -29,12 +29,19 @@ namespace Player
         [Tooltip("层高间距（Y 方向）/ Layer height (Y axis)")]
         [SerializeField] private float layerHeight = 0.35f;
 
+        [Tooltip("对象池（留空则使用单例）/ Object pool (uses singleton if empty)")]
+        [SerializeField] private ResourceObjectPool objectPool;
+
         private PlayerBackpack _backpack;
         private readonly List<GameObject> _spawnedBlocks = new();
 
-        private void Awake()
-        {
+        private ResourceObjectPool _pool;
+
+        private void Awake() {
             _backpack = GetComponent<PlayerBackpack>();
+            _pool = objectPool != null ? objectPool : ResourceObjectPool.Instance;
+            if (_pool == null)
+                Debug.LogError("[BackpackView] ResourceObjectPool not found.", this);
         }
 
         private void OnEnable()
@@ -60,7 +67,7 @@ namespace Player
             // 清除旧块（归还对象池） / Clear old blocks (return to pool)
             foreach (var block in _spawnedBlocks)
             {
-                if (block != null) ResourceObjectPool.Instance?.Return(block);
+                if (block != null) _pool?.Return(block);
             }
             _spawnedBlocks.Clear();
 
@@ -82,7 +89,7 @@ namespace Player
                     Vector3 worldPos = _backpack.backpackAnchor.TransformPoint(localPos);
                     Quaternion rot = _backpack.backpackAnchor.rotation;
 
-                    var block = ResourceObjectPool.Instance?.Get(entry.backpackPrefab, worldPos, rot, _backpack.backpackAnchor);
+                    var block = _pool?.Get(entry.backpackPrefab, worldPos, rot, _backpack.backpackAnchor);
                     if (block != null)
                         _spawnedBlocks.Add(block);
                     index++;

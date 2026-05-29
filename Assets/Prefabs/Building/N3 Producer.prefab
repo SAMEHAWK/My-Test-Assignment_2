@@ -66,7 +66,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 7109788284999039525, guid: ac28c1de708549f4b8543022940be16a, type: 3}
       propertyPath: m_Name
-      value: N3 Producter Variant Variant
+      value: N3 Producer
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []

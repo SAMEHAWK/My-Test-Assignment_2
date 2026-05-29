@@ -39,3 +39,5 @@ MonoBehaviour:
     m_RotationOrder: 4
   initialPoolSize: 10
   transferInterval: 0.1
+  productionStaggerInterval: 0.15
+  arcHeight: 2

@@ -122,8 +122,9 @@ GameObject:
   m_Component:
   - component: {fileID: 454840842787402201}
   - component: {fileID: 1418726484978457290}
+  - component: {fileID: 9912345678901234567}
   m_Layer: 0
-  m_Name: N1 Producter
+  m_Name: N1 Producer
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -171,6 +172,23 @@ MonoBehaviour:
   resourceDatabase: {fileID: 11400000, guid: 57c3b0f16e6b35b43ade932f9feb278f, type: 2}
   animationSpeed: 5
   consumeAnchor: {fileID: 6814244496077907440}
+--- !u!114 &9912345678901234567
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4265175301259078021}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b7c4e2a91f3d48c6a9e0b1d5f6a2c8e3, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Building.BuildingProductionView
+  building: {fileID: 1418726484978457290}
+  targetRenderer: {fileID: 4551417828392563005}
+  producingColor: {r: 0.3, g: 0.85, b: 0.35, a: 1}
+  inputMissingColor: {r: 0.9, g: 0.25, b: 0.25, a: 1}
+  outputFullColor: {r: 0.95, g: 0.85, b: 0.2, a: 1}
 --- !u!1 &6929960479338186237
 GameObject:
   m_ObjectHideFlags: 0

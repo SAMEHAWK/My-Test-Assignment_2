@@ -16,8 +16,11 @@ namespace Data
         [Tooltip("对象池初始容量 / Initial object pool size")]
         public int initialPoolSize = 10;
 
-        [Tooltip("每个资源单位的传输间隔（秒）/ Interval between each unit transfer in seconds")]
+        [Tooltip("队列出队间隔（TransferManager 用）/ Queue dequeue interval for TransferManager")]
         public float transferInterval = 0.3f;
+
+        [Tooltip("建筑生产多段动画错开间隔（秒）/ Stagger interval between building production transfer clips")]
+        public float productionStaggerInterval = 0.15f;
 
         [Tooltip("抛物线弧高（Y 轴偏移峰值）/ Parabolic arc height (peak Y offset)")]
         public float arcHeight = 2f;

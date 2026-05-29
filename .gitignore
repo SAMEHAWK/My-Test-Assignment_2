@@ -80,7 +80,24 @@ Desktop.ini
 *.swp
 *~
 
-# Claude 相关文件
+# AI 协作本地配置（不提交面试/交付包）
+# Local AI tooling — exclude from submission
+AGENTS.md
+CLAUDE.md
 Claude.md
 .claude/
-AGENTS.md
+.cursor/
+
+# docs 内 AI / 协作文档（本地保留；GitHub 上不出现）
+# Public docs on GitHub: docs/架构设计.md, docs/项目改进计划.md only
+/docs/skill-本地覆盖.md
+/docs/skill-体系说明.md
+/docs/PROJECT_STATUS.md
+/docs/AAR_TEMPLATE.md
+/docs/AAR/
+/docs/多会话并行执行计划.md
+/docs/archive/
+
+# 本地脚本（GitHub Desktop 一次性 untrack 用，不推送）
+/scripts/
+
