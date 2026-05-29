@@ -20,8 +20,8 @@ namespace Building
         private BuildingState currentState = BuildingState.Producing;
         public BuildingState CurrentState => currentState;
 
-        [Tooltip("生产状态变化时触发（状态, 原因描述）/ Fired when production state changes (state, reason)")]
-        public UnityEvent<BuildingState, string> OnStateChanged;
+        [Tooltip("生产状态变化时触发 / Fired when production state changes")]
+        public UnityEvent<BuildingState> OnStateChanged;
 
         [Tooltip("生产完成时触发（资源类型）/ Fired when a production cycle completes")]
         public UnityEvent<ResourceType> OnProductionCompleted;
@@ -29,16 +29,86 @@ namespace Building
         // 输入/输出仓库 / Input and output warehouses
         [SerializeField] private Warehouse inputWarehouse;
         [SerializeField] private Warehouse outputWarehouse;
+        public Warehouse InputWarehouse => inputWarehouse;
+        public Warehouse OutputWarehouse => outputWarehouse;
 
         [Tooltip("消耗资源时的目标锚点（资源从仓库飞向此处）/ Target anchor for consumed resources")]
         [SerializeField] private Transform consumeAnchor;
 
+        [Tooltip("传输管理器（留空则使用单例）/ Transfer manager (uses singleton if empty)")]
+        [SerializeField] private TransferManager transferManager;
+
         // 生产计时器 / Production timer
         private float productionTimer;
 
-        private void Start()
+        // 解析传输管理器引用 / Resolve transfer manager reference
+        private TransferManager Transfer => transferManager != null ? transferManager : TransferManager.Instance;
+
+        private void Awake()
         {
             FindWarehouses();
+        }
+
+        private void OnEnable()
+        {
+            BindWarehouseListeners(true);
+        }
+
+        private void OnDisable()
+        {
+            BindWarehouseListeners(false);
+        }
+
+        // 绑定仓库事件：入库后立即重检停产状态 / Bind warehouse events to re-evaluate stop state on deposit
+        private void BindWarehouseListeners(bool bind)
+        {
+            if (inputWarehouse != null)
+            {
+                if (bind)
+                    inputWarehouse.OnResourceAdded.AddListener(OnInputWarehouseChanged);
+                else
+                    inputWarehouse.OnResourceAdded.RemoveListener(OnInputWarehouseChanged);
+            }
+
+            if (outputWarehouse != null)
+            {
+                if (bind)
+                    outputWarehouse.OnResourceRemoved.AddListener(OnOutputWarehouseChanged);
+                else
+                    outputWarehouse.OnResourceRemoved.RemoveListener(OnOutputWarehouseChanged);
+            }
+        }
+
+        // Input 入库（含玩家存放动画落地）后尝试恢复生产 / Try resume after input deposited
+        private void OnInputWarehouseChanged(ResourceType type, int amount)
+        {
+            if (currentState != BuildingState.InputMissing) return;
+            TryResumeProduction();
+        }
+
+        // Output 被取走后尝试恢复生产 / Try resume after output warehouse has space
+        private void OnOutputWarehouseChanged(ResourceType type, int amount)
+        {
+            if (currentState != BuildingState.OutputFull) return;
+            TryResumeProduction();
+        }
+
+        // 库存变化后立刻重检并尝试生产，避免等下一个 Tick / Re-check and produce immediately
+        private void TryResumeProduction()
+        {
+            if (config == null) return;
+
+            if (!HasRequiredInputs())
+                return;
+
+            if (!CanFitOutputRecipe())
+            {
+                ChangeState(BuildingState.OutputFull);
+                return;
+            }
+
+            ChangeState(BuildingState.Producing);
+            TryProduce();
         }
 
         // 从子物体中查找并分类仓库 / Find and classify warehouses from child objects
@@ -73,16 +143,16 @@ namespace Building
         private void TryProduce()
         {
             // 1. 检查输入资源是否充足 / Check if input resources are sufficient
-            if (!HasRequiredInputs(out string missingReason))
+            if (!HasRequiredInputs())
             {
-                ChangeState(BuildingState.InputMissing, missingReason);
+                ChangeState(BuildingState.InputMissing);
                 return;
             }
 
             // 2. 检查输出仓库是否能容纳本轮全部产出 / Check if output warehouse can fit this cycle's output
-            if (!CanFitOutputRecipe(out string outputFullReason))
+            if (!CanFitOutputRecipe())
             {
-                ChangeState(BuildingState.OutputFull, outputFullReason);
+                ChangeState(BuildingState.OutputFull);
                 return;
             }
 
@@ -101,13 +171,11 @@ namespace Building
                 }
             }
 
-            // 4. 产出资源在动画到达后才加入仓库，确保视觉同步
-            //    Add output resources on animation arrival to keep visuals in sync
+            // 4. 产出资源在动画到达后才加入仓库 / Add output on animation arrival
             foreach (var recipe in config.outputRecipe)
             {
                 for (int i = 0; i < recipe.amount; i++)
                 {
-                    // 捕获变量供回调闭包使用 / Capture variables for closure
                     var capturedType = recipe.type;
                     var capturedOutput = outputWarehouse;
 
@@ -124,7 +192,6 @@ namespace Building
                     }
                     else
                     {
-                        // 无动画锚点时直接加入（回退）/ Add directly when no animation anchors (fallback)
                         if (capturedOutput != null && capturedOutput.CanAddResource(capturedType, 1))
                         {
                             capturedOutput.AddResource(capturedType, 1);
@@ -139,70 +206,56 @@ namespace Building
                 StartCoroutine(PlayAnimationsStaggered(animations));
 
             // 6. 恢复生产状态 / Resume producing state
-            ChangeState(BuildingState.Producing, null);
+            ChangeState(BuildingState.Producing);
         }
 
-        // 逐帧错开播放传输动画，消耗动画纯视觉，产出动画在到达时回调加入仓库
-        // Play transfer animations staggered — consume is visual-only, produce adds to warehouse on arrival
+        // 逐帧错开播放传输动画 / Play transfer animations staggered
         private IEnumerator PlayAnimationsStaggered(
             List<(ResourceType type, Transform start, Transform end, System.Action onComplete)> animations)
         {
             foreach (var (type, start, end, onComplete) in animations)
             {
-                TransferManager.Instance.PlayTransfer(type, start, end, onComplete);
+                Transfer.PlayTransfer(type, start, end, onComplete);
                 yield return new WaitForSeconds(0.15f);
             }
         }
 
         // 检查输出仓库是否能容纳本轮配方产出 / Check if output warehouse can fit all recipe outputs
-        private bool CanFitOutputRecipe(out string reason)
+        private bool CanFitOutputRecipe()
         {
-            reason = null;
-
             if (outputWarehouse == null || config.outputRecipe == null || config.outputRecipe.Length == 0)
                 return true;
 
             foreach (var recipe in config.outputRecipe)
             {
                 if (!outputWarehouse.CanAddResource(recipe.type, recipe.amount))
-                {
-                    int current = outputWarehouse.GetTotalStored();
-                    reason = $"输出仓库空间不足 / Output warehouse cannot fit {recipe.type} × {recipe.amount} " +
-                             $"(当前 {current}/{outputWarehouse.Capacity})";
                     return false;
-                }
             }
 
             return true;
         }
 
         // 检查所有输入资源是否充足 / Check if all required input resources are available
-        private bool HasRequiredInputs(out string reason)
+        private bool HasRequiredInputs()
         {
-            reason = null;
-
             if (inputWarehouse == null || config.inputRecipe == null || config.inputRecipe.Length == 0)
                 return true;
 
             foreach (var recipe in config.inputRecipe)
             {
                 if (!inputWarehouse.HasResources(recipe.type, recipe.amount))
-                {
-                    int current = inputWarehouse.GetResourceCount(recipe.type);
-                    reason = $"缺少 {recipe.type}: 需要 {recipe.amount} / 当前 {current}";
                     return false;
-                }
             }
 
             return true;
         }
 
         // 切换状态并触发事件 / Change state and fire event
-        private void ChangeState(BuildingState newState, string reason)
+        private void ChangeState(BuildingState newState)
         {
             if (currentState == newState) return;
             currentState = newState;
-            OnStateChanged?.Invoke(newState, reason);
+            OnStateChanged?.Invoke(newState);
         }
     }
 }

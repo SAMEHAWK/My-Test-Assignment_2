@@ -14,9 +14,15 @@ namespace Player
         private float _transferInterval = 0.5f;
         public float transferInterval { get => _transferInterval; set => _transferInterval = value; }
 
+        [SerializeField, Tooltip("传输管理器（留空则使用单例）/ Transfer manager (uses singleton if empty)")]
+        private TransferManager transferManager;
+
         private PlayerBackpack _backpack;
         private Warehouse _currentWarehouse;
         private float _transferTimer;
+
+        // 解析传输管理器引用 / Resolve transfer manager reference
+        private TransferManager Transfer => transferManager != null ? transferManager : TransferManager.Instance;
 
         private void Awake()
         {
@@ -66,7 +72,7 @@ namespace Player
                 Transform endPoint = _backpack.backpackAnchor;
                 PlayerBackpack backpack = _backpack;
 
-                TransferManager.Instance.EnqueueTransfer(type, startPoint, endPoint, () =>
+                Transfer.EnqueueTransfer(type, startPoint, endPoint, () =>
                 {
                     // 动画完成后加入背包；失败则退回仓库 / Add to backpack on arrival; return to warehouse on failure
                     if (backpack.CanAddResource(type, 1))
@@ -107,7 +113,7 @@ namespace Player
                 Transform startPoint = backpack.backpackAnchor;
                 Transform endPoint = warehouse.ContentPoint;
 
-                TransferManager.Instance.EnqueueTransfer(type, startPoint, endPoint, () =>
+                Transfer.EnqueueTransfer(type, startPoint, endPoint, () =>
                 {
                     // 动画完成后加入仓库；失败则退回背包 / Add to warehouse on arrival; return to backpack on failure
                     if (warehouse.CanAddResource(type, 1))

@@ -11,6 +11,7 @@ A Unity 6 (6000.3.13f1) resource production chain game for a technical assessmen
 - [Features](#features)
 - [How to Use](#how-to-use)
 - [Controls](#controls)
+- [Building Status UI Setup](#building-status-ui-setup)
 - [Project Architecture](#project-architecture)
 - [Project Directory](#project-directory)
 - [Configuration & Parameters](#configuration--parameters)
@@ -28,7 +29,8 @@ A Unity 6 (6000.3.13f1) resource production chain game for a technical assessmen
 - **Auto interaction**: Player approaches warehouse Trigger zones to automatically pick up or deposit resources at intervals
 - **Visual animations**: Four transfer scenarios unified under `TransferManager` (Building→Warehouse, Warehouse→Player, Player→Warehouse, Warehouse→Building)
 - **Grid stack display**: `WarehouseView` / `BackpackView` display resource blocks on warehouses and player back as an X×Z layered grid
-- **Production state events**: `BuildingProduction.OnStateChanged` fires `Producing / InputMissing / OutputFull`, can be subscribed for UI or logging
+- **Stop-status text**: `BuildingStatusText` subscribes to `OnStateChanged` and shows English stop reasons; reverts to building name when producing
+- **Production state events**: `BuildingProduction.OnStateChanged` fires `Producing / InputMissing / OutputFull`
 
 ---
 
@@ -92,6 +94,39 @@ If the scene or Prefabs are not yet configured, refer to the [Configuration & Pa
 
 ---
 
+## Building Status UI Setup
+
+Production state is broadcast via `BuildingProduction.OnStateChanged`. The built-in **`BuildingStatusText`** component displays stop reasons on world-space TMP text. You can also subscribe to the event for custom UI.
+
+### Message flow
+
+| Layer | Mechanism | Description |
+|------|------|------|
+| Logic | `OnStateChanged(BuildingState)` | Fires only on state **transitions** |
+| Logic | `TryResumeProduction()` | Re-checks immediately after input deposit or output pickup |
+| UI | `BuildingStatusText` | Subscribes to `OnStateChanged`; formats English reason from warehouse + recipe |
+
+### Display examples
+
+| State | Display |
+|------|------|
+| `Producing` | Building name only (TMP default text) |
+| `InputMissing` | Name + `Need N1x2(has 1)` |
+| `OutputFull` | Name + `Output full (8/8)` |
+
+### Editor steps (BuildingStatusText)
+
+1. Under building root (`BuildingProduction`): `GameObject > UI > Canvas`, set **Render Mode = World Space**, scale ~`0.01`, position above building, assign **Event Camera = Main Camera**.
+2. Child: `UI > Text - TextMeshPro`, set **Text** to building name (e.g. `N2 Producter`).
+3. Add **Building Status Text** component; drag `BuildingProduction` into **Building** (or leave empty if under building hierarchy).
+4. Apply Prefab; Play to verify stop/resume text.
+
+Custom UI: subscribe to `OnStateChanged` — the event carries **state enum only**, not reason text; query warehouses and recipe like `BuildingStatusText` does.
+
+See **[README.zh-CN.md — 建筑状态 UI 接入](README.zh-CN.md#建筑状态-ui-接入)** for the full Chinese walkthrough.
+
+---
+
 ## Project Architecture
 
 ### Layer Structure
@@ -99,7 +134,7 @@ If the scene or Prefabs are not yet configured, refer to the [Configuration & Pa
 ```
 ┌─────────────────────────────────────────────────────────┐
 │  View                                                    │
-│  WarehouseView · BackpackView                           │
+│  WarehouseView · BackpackView · BuildingStatusText       │
 ├─────────────────────────────────────────────────────────┤
 │  Gameplay                                                │
 │  BuildingProduction · PlayerController                  │
@@ -129,13 +164,14 @@ If the scene or Prefabs are not yet configured, refer to the [Configuration & Pa
 | **Building** | Warehouse inventory, production state machine, warehouse visualization | Core, Data, Transfer |
 | **Player** | Movement, backpack, warehouse interaction, backpack visualization | Core, Building, Transfer, Data |
 | **Transfer** | Flight animation scheduling, object pool | Core, Data |
+| **UI** | Building stop-status text | Core, Building |
 | **Util** | Grid layout computation | None |
 
 ### Data Flow Summary
 
-1. **Building Production**: `BuildingProduction` ticks per `BuildingProductionConfig` → checks input/output → deducts inputs → `TransferManager.PlayTransfer()` plays animation → writes to Output warehouse on arrival.
+1. **Building Production**: `BuildingProduction` ticks on interval or **`TryResumeProduction()`** (after input deposit / output pickup) → checks I/O → deducts inputs → plays animation → writes output → `OnStateChanged` notifies UI.
 2. **Player Interaction**: `PlayerWarehouseInteraction` detects Trigger → initiates transfer at intervals → `TransferManager.EnqueueTransfer()` queues playback → callback updates backpack or warehouse.
-3. **View Refresh**: `Warehouse` / `PlayerBackpack` inventory changes fire events → `WarehouseView` / `BackpackView` rebuild grid display.
+3. **View Refresh**: `Warehouse` / `PlayerBackpack` inventory changes fire events → `WarehouseView` / `BackpackView` rebuild grid; `BuildingStatusText` listens to production state and warehouse changes.
 
 ### Core Design Principles
 
@@ -145,7 +181,7 @@ If the scene or Prefabs are not yet configured, refer to the [Configuration & Pa
 - **TransferManager unified entry**: Four transfer scenarios share the same animation and object pool
 - **Event-driven extensibility**: Production state and inventory changes via `UnityEvent`, ready for UI hooks
 
-For detailed design, see **[docs/架构设计.md](docs/架构设计.md)** (current v1.1).
+For detailed design, see **[docs/架构设计.md](docs/架构设计.md)** (current v1.3).
 
 ### Script Directory
 
@@ -171,6 +207,8 @@ Assets/Scripts/
 ├── Transfer/
 │   ├── TransferManager.cs           # Singleton: animation + queue
 │   └── ResourceObjectPool.cs        # Singleton: object pool
+├── UI/
+│   └── BuildingStatusText.cs        # Building stop-status TMP text
 └── Util/
     └── GridLayoutHelper.cs          # X×Z grid layered coordinate calculation
 ```
@@ -279,10 +317,9 @@ Controls transfer animation and queue behavior.
 
 | Document | Path | Description |
 |------|------|------|
-| Test Brief | `docs/深圳维拓方科技有限公司 Unity Test Task.pdf` | Original task requirements |
-| Architecture Design | `docs/架构设计.md` | Core design doc, component relationships, data flow |
-| Parallel Execution Plan | `docs/多会话并行执行计划.md` | Multi-AI session file allocation & interface contracts |
-| AI Conventions | `AGENTS.md` | AI assistant behavior rules for this project |
+| Architecture Design | [docs/架构设计.md](docs/架构设计.md) | Core design doc, component relationships, data flow |
+| Parallel Execution Plan | [docs/多会话并行执行计划.md](docs/多会话并行执行计划.md) | Multi-AI session file allocation & interface contracts |
+| AI Conventions | [AGENTS.md](AGENTS.md) | AI assistant behavior rules for this project |
 
 ---
 

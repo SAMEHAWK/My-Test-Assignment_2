@@ -9,6 +9,7 @@
 - [功能特性](#功能特性)
 - [如何使用](#如何使用)
 - [操作方式](#操作方式)
+- [建筑状态 UI 接入](#建筑状态-ui-接入)
 - [项目架构](#项目架构)
 - [项目目录说明](#项目目录说明)
 - [配置与参数说明](#配置与参数说明)
@@ -26,7 +27,8 @@
 - **自动交互**：玩家靠近仓库 Trigger 区域时，按间隔自动拾取或存放资源
 - **可视化动画**：四种传输场景统一由 `TransferManager` 处理（建筑→仓库、仓库→角色、角色→仓库、仓库→建筑）
 - **网格堆叠显示**：`WarehouseView` / `BackpackView` 在仓库与角色背上按 X×Z 网格分层显示资源块
-- **生产状态事件**：`BuildingProduction.OnStateChanged` 抛出 `Producing / InputMissing / OutputFull`，可订阅驱动 UI 或日志
+- **停产状态文字**：`BuildingStatusText` 订阅 `OnStateChanged`，缺料/满库时显示英文原因，恢复生产后切回建筑名
+- **生产状态事件**：`BuildingProduction.OnStateChanged` 抛出 `Producing / InputMissing / OutputFull`
 
 ---
 
@@ -90,6 +92,76 @@
 
 ---
 
+## 建筑状态 UI 接入
+
+建筑生产状态通过 `BuildingProduction.OnStateChanged` 广播，内置组件 **`BuildingStatusText`** 负责在世界空间 TMP 文字上显示停产原因。也可自行订阅该事件实现自定义 UI。
+
+### 状态消息来源
+
+| 层级 | 机制 | 说明 |
+|------|------|------|
+| **逻辑层** | `BuildingProduction.OnStateChanged(BuildingState)` | 仅在状态**切换**时触发（`Producing` / `InputMissing` / `OutputFull`） |
+| **逻辑层** | `TryResumeProduction()` | Input 入库或 Output 被取走后**立即**重检；条件满足则恢复生产，不必等下一个生产周期 |
+| **UI 层** | `BuildingStatusText` | 订阅 `OnStateChanged`；自行查 `Config` + 仓库库存格式化英文原因行 |
+
+### 显示文案示例（英文）
+
+| 状态 | 显示 |
+|------|------|
+| `Producing` | 仅建筑名（TMP 初始文本），如 `N2 Producter` |
+| `InputMissing` | 建筑名 + `Need N1x2(has 1)` |
+| `InputMissing`（库存已够、等待恢复） | 建筑名 + `Ready`（极短过渡，通常随即切回生产） |
+| `OutputFull` | 建筑名 + `Output full (8/8)` |
+
+### 需你在编辑器中操作：挂载 BuildingStatusText
+
+以某建筑 Prefab（根节点含 `BuildingProduction`）为例：
+
+1. **创建 World Space Canvas**
+   - 选中建筑根节点，菜单 `GameObject > UI > Canvas`（游戏对象 > UI > Canvas），命名为 `StatusCanvas`
+   - **目的**：在建筑上方显示世界空间文字
+   - Inspector 中 `Canvas` 组件：`Render Mode` = **World Space**
+   - `Rect Transform`：`Width/Height` 约 `8 × 1`，`Scale` 约 `(0.01, 0.01, 0.01)`（按场景比例微调）
+   - `Pos Y` 调高至建筑上方（如 `2`～`3`）
+   - **Event Camera**：拖入场景 `Main Camera`
+   - **预期**：Scene 视图中 Canvas 缩为建筑顶部的薄板
+
+2. **创建 TMP 文字**
+   - 右键 `StatusCanvas` → `UI > Text - TextMeshPro`（若首次使用按提示 Import TMP Essentials）
+   - 命名为 `StatusText`
+   - **Text** 字段填入建筑名（与 `BuildingProductionConfig.buildingName` 一致，如 `N2 Producter`）——此文本即正常生产时的显示内容
+   - `Font Size` 约 `0.8`（World Space 下按 Scale 调整）
+   - `Alignment` 水平/垂直均居中
+   - **预期**：文字居中显示于 Canvas 内
+
+3. **添加 BuildingStatusText 组件**
+   - 选中 `StatusText`，`Add Component` → 搜索 `Building Status Text`
+   - **Building** 槽：
+     - **推荐**：拖入建筑根节点上的 `BuildingProduction` 组件
+     - **或留空**：若 `StatusCanvas` 是 `BuildingProduction` 所在物体的子层级，运行时会 `GetComponentInParent` 自动查找
+   - **注意**：若留空且层级不在建筑子树内，Console 会出现 `[BuildingStatusText] No BuildingProduction found` Warning
+   - **预期**：Inspector 出现 `Building Status Text (Script)`，含 `Building` 可选引用
+
+4. **保存 Prefab**
+   - 若编辑 Prefab：点击 **Apply** 保存
+   - Play 后缺料/满库应出现第二行英文原因，恢复生产后回到仅建筑名
+
+### 自定义 UI（可选）
+
+不使用时内置组件，可编写脚本订阅：
+
+```csharp
+// 挂载到任意 UI 对象，在 Inspector 拖入对应 BuildingProduction
+buildingProduction.OnStateChanged.AddListener(state => {
+    // state: Producing / InputMissing / OutputFull
+    // 自行读 buildingProduction.InputWarehouse / Config 拼文案
+});
+```
+
+`OnStateChanged` **不携带**原因字符串；缺料详情需像 `BuildingStatusText` 一样查询仓库与配方。
+
+---
+
 ## 项目架构
 
 ### 模块分层
@@ -97,7 +169,7 @@
 ```
 ┌─────────────────────────────────────────────────────────┐
 │  表现层 View                                             │
-│  WarehouseView · BackpackView                           │
+│  WarehouseView · BackpackView · BuildingStatusText      │
 ├─────────────────────────────────────────────────────────┤
 │  玩法层 Gameplay                                         │
 │  BuildingProduction · PlayerController                  │
@@ -127,13 +199,14 @@
 | **Building** | 仓库库存、生产状态机、仓库可视化 | Core, Data, Transfer |
 | **Player** | 移动、背包、仓库交互、背包可视化 | Core, Building, Transfer, Data |
 | **Transfer** | 飞行动画调度、对象池 | Core, Data |
+| **UI** | 建筑停产状态文字 | Core, Building |
 | **Util** | 网格布局计算 | 无 |
 
 ### 数据流概要
 
-1. **建筑生产**：`BuildingProduction` 按 `BuildingProductionConfig` 定时 Tick → 检查输入/输出 → 扣输入 → `TransferManager.PlayTransfer()` 播放动画 → 产出到达后写入 Output 仓库。
+1. **建筑生产**：`BuildingProduction` 定时 Tick 或 **`TryResumeProduction()`**（Input 入库 / Output 取货后立即）→ 检查输入/输出 → 扣输入 → 播放动画 → 产出写入 Output 仓库 → `OnStateChanged` 通知 UI。
 2. **玩家交互**：`PlayerWarehouseInteraction` 检测 Trigger → 按间隔发起传输 → `TransferManager.EnqueueTransfer()` 排队播放 → 回调更新背包或仓库。
-3. **视图刷新**：`Warehouse` / `PlayerBackpack` 库存变化触发事件 → `WarehouseView` / `BackpackView` 重建网格显示。
+3. **视图刷新**：`Warehouse` / `PlayerBackpack` 库存变化触发事件 → `WarehouseView` / `BackpackView` 重建网格显示；`BuildingStatusText` 监听生产状态与仓库变化更新 TMP 文字。
 
 ### 核心设计原则
 
@@ -143,7 +216,7 @@
 - **TransferManager 统一入口**：四种传输场景共用同一套动画与对象池
 - **事件驱动扩展**：生产状态、库存变化通过 `UnityEvent` 抛出，便于挂 UI
 
-详细设计见 **[docs/架构设计.md](docs/架构设计.md)**（当前 v1.1）。
+详细设计见 **[docs/架构设计.md](docs/架构设计.md)**（当前 v1.3）。
 
 ### 脚本目录
 
@@ -169,6 +242,8 @@ Assets/Scripts/
 ├── Transfer/
 │   ├── TransferManager.cs      # 单例：动画 + 队列
 │   └── ResourceObjectPool.cs   # 单例：对象池
+├── UI/
+│   └── BuildingStatusText.cs   # 建筑停产状态 TMP 文字
 └── Util/
     └── GridLayoutHelper.cs     # X×Z 网格分层坐标计算
 ```
@@ -298,16 +373,29 @@ My-Test-Assignment_2/
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | `config` | BuildingProductionConfig | 拖入对应建筑 Config SO |
-| `inputWarehouse` | Warehouse | 可手动指定；留空则 Start 时从子物体按类型查找 |
+| `inputWarehouse` | Warehouse | 可手动指定；留空则 Awake 时从子物体按类型查找 |
 | `outputWarehouse` | Warehouse | 同上 |
 | `consumeAnchor` | Transform | 消耗动画飞向的目标点（纯视觉） |
+| `transferManager` | TransferManager | 可选；留空则使用 `TransferManager.Instance` |
+
+**恢复生产**：监听 `InputWarehouse.OnResourceAdded` / `OutputWarehouse.OnResourceRemoved`，在 `InputMissing` / `OutputFull` 时调用 `TryResumeProduction()`，原料与空位满足则立即 `TryProduce()`。
 
 事件：
 
 | 事件 | 参数 | 说明 |
 |------|------|------|
-| `OnStateChanged` | BuildingState, string | 状态变化（含原因文本） |
+| `OnStateChanged` | BuildingState | 状态变化；原因文字由 `BuildingStatusText` 自行查询仓库格式化 |
 | `OnProductionCompleted` | ResourceType | 单件产出到达仓库时 |
+
+#### BuildingStatusText（建筑子物体 TMP 文字）
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `building` | BuildingProduction | 可选；留空则从父级 `GetComponentInParent` 查找 |
+
+行为：`Producing` 显示 TMP 初始建筑名；`InputMissing` / `OutputFull` 追加英文原因行；监听 Input/Output 仓库库存变化实时刷新计数。
+
+接入步骤见上文 **[建筑状态 UI 接入](#建筑状态-ui-接入)**。
 
 #### PlayerController（玩家）
 
@@ -328,6 +416,7 @@ My-Test-Assignment_2/
 | 字段 | 类型 | 默认 | 说明 |
 |------|------|------|------|
 | `transferInterval` | float | 0.5 | 玩家在 Trigger 内每隔多久尝试传输 1 个资源 |
+| `transferManager` | TransferManager | 空 | 可选；留空则使用 `TransferManager.Instance` |
 
 需要：同物体上有 `CharacterController` + **Is Trigger** 的 Collider（或与仓库 Trigger 重叠检测）。
 
@@ -412,8 +501,14 @@ My-Test-Assignment_2/
 
 **Q：建筑不生产？**
 
-- 查看 Console 中 `OnStateChanged` 原因：`InputMissing` = 缺料；`OutputFull` = 输出仓库满
+- 看建筑上方状态文字：`Need N1x2(has 0)` = 原料不足；`Output full (10/10)` = 产出仓库满
 - 确认 `BuildingProduction.config` 已绑定对应 SO
+
+**Q：存放资源后仍显示 Input missing / Need？**
+
+- 若显示 `Need N1x2(has 1)`：数量仍不足（如建筑 2 需要 2 个 N1），继续搬运
+- 若资源刚落地：等待存放动画结束（入库后 `TryResumeProduction` 会自动恢复）
+- 若显示 `Ready` 后未恢复：检查 Output 是否已满（会切到 `Output full`）
 
 **Q：修改 Input Actions 后编译报错？**
 
