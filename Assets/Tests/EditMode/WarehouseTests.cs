@@ -16,6 +16,8 @@ public class WarehouseTests
     {
         _go = new GameObject("TestWarehouse");
         _warehouse = _go.AddComponent<Warehouse>();
+        // EditMode 不会自动调用 Awake，需手动触发初始化 / Awake is not auto-called in EditMode
+        InvokeAwake(_warehouse);
     }
 
     [TearDown]
@@ -47,5 +49,12 @@ public class WarehouseTests
         var field = typeof(Warehouse).GetField("acceptedTypes",
             BindingFlags.NonPublic | BindingFlags.Instance);
         field?.SetValue(warehouse, new System.Collections.Generic.List<ResourceType>(types));
+    }
+
+    private static void InvokeAwake(object target)
+    {
+        var method = target.GetType().GetMethod("Awake",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+        method?.Invoke(target, null);
     }
 }

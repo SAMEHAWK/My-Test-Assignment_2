@@ -337,7 +337,11 @@ Manually verified in Unity Play Mode on **2026-05-29** (see `docs/架构设计.m
 - Three buildings auto-produce N1 → N2 → N3 at configured intervals
 - All transfers use Lerp flight animations; stop states show on world-space TMP **and building mesh color** (green/red/yellow)
 - Auto pickup/deposit near warehouses; production resumes via `TryResumeProduction`
-- EditMode tests: `Window > General > Test Runner` → EditMode → Run All (`ResourceInventoryTests` + thin adapter tests)
+See [`docs/架构设计.md`](docs/架构设计.md) §7.2–7.3 for IMP-12～14 and phase G checklist.
+
+### Phase G (IMP-05 / IMP-06)
+
+**Editor required** — Create `Assets/Prefabs/Player.prefab` by dragging Hierarchy `Player` into Project (see README.zh-CN.md「阶段 G 收尾」for full steps). Run `git init` at project root for IMP-05.
 
 ---
 

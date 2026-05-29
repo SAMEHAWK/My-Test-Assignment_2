@@ -496,6 +496,67 @@ My-Test-Assignment_2/
 - 入库或取货后 `TryResumeProduction` 立即恢复生产
 - EditMode 单元测试：`Window > General > Test Runner` → EditMode → Run All（`ResourceInventoryTests` + 适配器薄测）
 
+完整勾选清单见 [`docs/架构设计.md`](docs/架构设计.md) **§7.2～7.3**（含 IMP-12～14 与阶段 G）。
+
+---
+
+## 阶段 G 收尾（IMP-05 / IMP-06）
+
+> **需你在编辑器中操作** — 以下无法仅靠改代码完成。详见 L2 `unity-editor-handoff.md`。
+
+### IMP-06 — 创建 Player Prefab
+
+**目的**：新场景可拖 Prefab 复现玩家，而非仅依赖场景内嵌对象。
+
+1. **打开场景**  
+   - Project → `Assets/Scenes/SampleScene.unity`  
+   - 预期：Hierarchy 中有 `Player` 根节点（含 `CharacterController`、`PlayerController`、`PlayerBackpack` 等）
+
+2. **创建 Prefab**  
+   - 若尚无 `Assets/Prefabs/` 文件夹：Project 右键 → **Create → Folder** → 命名 `Prefabs`  
+   - 将 Hierarchy 中的 **Player** 拖到 Project 的 `Assets/Prefabs/`  
+   - 命名为 **`Player.prefab`**  
+   - 预期：Project 出现 `Player.prefab`；Hierarchy 中 Player 变为蓝色 Prefab 实例
+
+3. **验证引用**  
+   - 选中 Player 实例，Inspector 检查 `PlayerBackpack.backpackAnchor`、`BackpackView.resourceDatabase` 等非空  
+   - **File → Save** 保存场景
+
+4. **预期结果**  
+   - 新建空场景拖入 `Player.prefab` + 三座 `N1/N2/N3 Producer.prefab` 即可复现主流程
+
+### IMP-05 — Git 初始化
+
+**目的**：展示模块演进历史（改进计划验收项）。
+
+1. 安装 [Git for Windows](https://git-scm.com/) 并确保 `git` 在 PATH 中  
+2. 项目根目录执行：
+
+```powershell
+cd "d:\Unity Project\My-Test-Assignment_2"
+git init
+git add .
+git status   # 确认无 Library/ Temp/ Logs/
+```
+
+3. 按 [`docs/项目改进计划.md`](docs/项目改进计划.md) IMP-05 建议分批 commit  
+4. 远程已配置时：`git remote add origin https://github.com/SAMEHAWK/My-Test-Assignment_2.git`
+
+> AI 代提交流程见 [`docs/skill-本地覆盖.md`](docs/skill-本地覆盖.md)「Git 同步」（须先 `pre-commit-review.ps1` exit 0）。
+
+### EditMode batchmode（可选 CLI 验证）
+
+**须先关闭 Unity 编辑器**（同一项目不能双开），再执行：
+
+```powershell
+& "D:\Unity Engine\6000.3.13f1\Editor\Unity.exe" `
+  -batchmode -nographics `
+  -projectPath "d:\Unity Project\My-Test-Assignment_2" `
+  -runTests -testPlatform EditMode `
+  -testResults "d:\Unity Project\My-Test-Assignment_2\TestResults.xml" `
+  -logFile "d:\Unity Project\My-Test-Assignment_2\Logs\editmode-test.log"
+```
+
 ---
 
 ## 常见问题

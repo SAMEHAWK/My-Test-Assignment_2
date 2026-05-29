@@ -11,6 +11,10 @@ namespace Player
         private float _moveSpeed = 5f;
         public float moveSpeed { get => _moveSpeed; set => _moveSpeed = value; }
 
+        [SerializeField, Tooltip("输入死区阈值（低于此值视为无输入）/ Input deadzone threshold")]
+        private float _deadzone = 0.01f;
+        public float deadzone { get => _deadzone; set => _deadzone = value; }
+
         [Tooltip("相机 Transform，用于计算相对移动方向（留空则使用世界空间方向）/ Camera transform for relative movement (world-space if left empty)")]
         public Transform cameraTransform;
 
@@ -43,7 +47,7 @@ namespace Player
             Vector2 input = _input.Player.Move.ReadValue<Vector2>();
             Vector3 move = Vector3.zero;
 
-            if (input.sqrMagnitude > 0.01f)
+            if (input.sqrMagnitude > _deadzone)
             {
                 // 相机相对方向投影到水平面 / Project camera-relative direction onto horizontal plane
                 Vector3 forward = cameraTransform != null ? cameraTransform.forward : Vector3.forward;

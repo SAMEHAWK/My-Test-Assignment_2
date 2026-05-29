@@ -44,6 +44,8 @@ namespace Building
         private void Awake()
         {
             _inventory = new ResourceInventory(capacity);
+            OnResourceAdded ??= new UnityEvent<ResourceType, int>();
+            OnResourceRemoved ??= new UnityEvent<ResourceType, int>();
         }
 
         public bool AcceptsType(ResourceType type)

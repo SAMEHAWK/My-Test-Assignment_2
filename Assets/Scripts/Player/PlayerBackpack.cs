@@ -28,6 +28,7 @@ namespace Player
         private void Awake()
         {
             _inventory = new ResourceInventory(_capacity);
+            OnBackpackChanged ??= new UnityEvent();
         }
 
         public bool CanAddResource(ResourceType type, int amount = 1)
